@@ -1,0 +1,27 @@
+# RouteRTL Tool Index — Curated Registry
+#
+# Human-curated list of companion host-side tools that pair with on-chip
+# debug cores or IPs from routertl-ip-index. Distinct from:
+#
+#   - routertl-ip-index    — HDL building blocks (ip.yml entries)
+#   - routertl-ref-index   — full project blueprints (per-version manifests)
+#
+# Tools listed here are programs that run on the host (the developer's
+# machine, not the FPGA) — Python CLIs, GUIs, daemons. They ship via
+# pip or git+ref. They do NOT carry HDL.
+#
+# Every entry below points at tools/<namespace>/<name>/tool.yml which
+# carries the canonical metadata. CI regenerates catalog.json whenever
+# this file or any tool.yml changes.
+#
+# License gating: OSI-approved licenses (Apache-2.0, MIT, BSD-2/3-Clause,
+# MPL-2.0, LGPL-2.1+, GPL-2.0+, OpenLogic-1.0). Proprietary or
+# non-redistributable tools may be listed for discoverability with
+# `status: non-redistributable` — `rr tool install` refuses those and
+# prints the upstream URL instead.
+#
+# RTL-P2.486 / RTL-P2.489 (this skeleton).
+#
+# This list starts empty. First seed: lcapossio/fcapz (RTL-P2.482).
+
+tools: []
