@@ -2,16 +2,16 @@
   {
     "namespace": "lcapossio",
     "name": "fcapz",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "description": "Vendor-agnostic JTAG debug stack \u2014 embedded logic analyzer (ELA), embedded I/O (EIO), embedded JTAG-AXI bridge, and JTAG-UART core. Pairs on-chip Verilog wrappers with a Python host CLI/GUI.",
     "license": "Apache-2.0",
     "homepage": "https://github.com/lcapossio/fpgacapZero",
     "maintainer": "Leonardo Capossio (lcapossio)",
     "status": "active",
     "install": {
-      "channel": "pypi",
-      "package": "fpgacapzero",
-      "version_spec": "^0.1.0"
+      "channel": "git",
+      "package": "https://github.com/lcapossio/fpgacapZero",
+      "ref": "v0.3.0"
     },
     "pairs_with": [
       "ela",
@@ -21,6 +21,7 @@
     ],
     "vendor_compat": [
       "xilinx7",
+      "xilinxus",
       "intel",
       "ecp5",
       "gowin"
