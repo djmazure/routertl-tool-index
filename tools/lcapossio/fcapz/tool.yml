@@ -1,0 +1,42 @@
+# fcapz — fpgacapZero host stack
+#
+# Apache-2.0 vendor-agnostic JTAG debug stack from Leonardo Capossio.
+# On-chip Verilog wrappers (ela / eio / ejtagaxi / ejtaguart) pair with a
+# Python host CLI/GUI distributed on PyPI as `fpgacapzero` (entry points:
+# `fcapz`, `fcapz-gui`).
+#
+# Registry pin = v0.1.0 per D.61 / jtag_stream.md ("Pin to v0.1.0; track
+# an internal fcapz upgrade ticket per minor version"). Upstream is on
+# v0.3.0 — see RTL-P3.237 for the upgrade evaluation.
+#
+# Vendor wrappers actually shipped in v0.1.0 (verified against
+# github.com/lcapossio/fpgacapZero @ tag v0.1.0):
+#   ela / eio   : ecp5, gowin, intel, xilinx7
+#   ejtagaxi    : intel, xilinx7
+#   ejtaguart   : intel, xilinx7
+# (xilinxus support landed in v0.3.0; polarfire is not yet implemented
+# upstream despite the design memo's aspirational list.)
+#
+# RTL-P2.482.
+
+name: fcapz
+namespace: lcapossio
+description: >-
+  Vendor-agnostic JTAG debug stack — embedded logic analyzer (ELA),
+  embedded I/O (EIO), embedded JTAG-AXI bridge, and JTAG-UART core.
+  Pairs on-chip Verilog wrappers with a Python host CLI/GUI.
+license: Apache-2.0
+homepage: https://github.com/lcapossio/fpgacapZero
+maintainer: Leonardo Capossio (lcapossio)
+version: 0.1.0
+status: active
+
+install:
+  pypi: fpgacapzero
+  version: ^0.1.0
+
+pairs_with: [ela, eio, axi, uart]
+vendor_compat: [xilinx7, intel, ecp5, gowin]
+interfaces: [jtag, axi-lite]
+tags: [debug, jtag, waveform, host-cli, host-gui, logic-analyzer, ela, eio]
+pairs_with_ips: []

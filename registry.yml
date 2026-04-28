@@ -24,4 +24,5 @@
 #
 # This list starts empty. First seed: lcapossio/fcapz (RTL-P2.482).
 
-tools: []
+tools:
+  - lcapossio/fcapz
