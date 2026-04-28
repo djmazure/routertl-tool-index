@@ -1,35 +1,44 @@
 # fcapz — fpgacapZero host stack
 #
 # Apache-2.0 vendor-agnostic JTAG debug stack from Leonardo Capossio.
-# On-chip Verilog wrappers (ela / eio / ejtagaxi / ejtaguart) pair with a
-# Python host CLI/GUI installed via `pip install
-# git+https://github.com/lcapossio/fpgacapZero@v0.3.0` (entry points:
-# `fcapz`, `fcapz-gui`). The Python distribution is *not* on PyPI today
-# (no published `fpgacapzero` release as of 2026-04-28) — git-only.
+# On-chip Verilog wrappers (ela / eio / ejtagaxi / ejtaguart per fcapz's
+# upstream naming) pair with a Python host CLI/GUI installed via
+# `pip install git+https://github.com/lcapossio/fpgacapZero@v0.3.0`
+# (entry points: `fcapz`, `fcapz-gui`). The Python distribution is
+# *not* on PyPI today (no published `fpgacapzero` release as of
+# 2026-04-28) — git-only.
+#
+# routertl-side terminology: fcapz's ELA core is what routertl calls a
+# "REA" (RouteRTL Embedded Analyzer, D.69 — vendor-neutral term that
+# also covers protocol-sniffer producers like deepskopion). The
+# pairs_with: list below uses routertl's REA terminology, not fcapz's
+# upstream ELA — they refer to the same on-chip core.
 #
 # Registry pin = v0.3.0 (latest tagged upstream release as of 2026-04-28).
 # Bumped from v0.1.0 after API-drift verification: zero diff in the
 # Analyzer / CaptureConfig / ProbeSpec / TriggerConfig / transport
-# signatures used by the routertl `rr ila stream` bridge. v0.3.0 adds
+# signatures used by the routertl `rr ila capture` bridge. v0.3.0 adds
 # xilinxus across all four core types and a fcapz_version.vh header.
 # Closes RTL-P3.237.
 #
 # Vendor wrappers shipped in v0.3.0 (verified against
 # github.com/lcapossio/fpgacapZero @ tag v0.3.0):
-#   ela / eio   : ecp5, gowin, intel, xilinx7, xilinxus
-#   ejtagaxi    : intel, xilinx7, xilinxus
-#   ejtaguart   : intel, xilinx7, xilinxus
+#   ela (REA) / eio  : ecp5, gowin, intel, xilinx7, xilinxus
+#   ejtagaxi         : intel, xilinx7, xilinxus
+#   ejtaguart        : intel, xilinx7, xilinxus
 # (polarfire is not yet implemented upstream despite the design memo's
 # aspirational list.)
 #
-# RTL-P2.482 (initial registration) · RTL-P3.237 (v0.3.0 bump).
+# RTL-P2.482 (initial registration) · RTL-P3.237 (v0.3.0 bump) ·
+# RTL-P3.241 (rename pairs_with ela → rea per D.69).
 
 name: fcapz
 namespace: lcapossio
 description: >-
-  Vendor-agnostic JTAG debug stack — embedded logic analyzer (ELA),
-  embedded I/O (EIO), embedded JTAG-AXI bridge, and JTAG-UART core.
-  Pairs on-chip Verilog wrappers with a Python host CLI/GUI.
+  Vendor-agnostic JTAG debug stack — REA (RouteRTL Embedded Analyzer;
+  fcapz upstream calls it ELA), embedded I/O (EIO), embedded JTAG-AXI
+  bridge, and JTAG-UART core. Pairs on-chip Verilog wrappers with a
+  Python host CLI/GUI.
 license: Apache-2.0
 homepage: https://github.com/lcapossio/fpgacapZero
 maintainer: Leonardo Capossio (lcapossio)
@@ -40,8 +49,8 @@ install:
   git: https://github.com/lcapossio/fpgacapZero
   ref: v0.3.0
 
-pairs_with: [ela, eio, axi, uart]
+pairs_with: [rea, eio, axi, uart]
 vendor_compat: [xilinx7, xilinxus, intel, ecp5, gowin]
 interfaces: [jtag, axi-lite]
-tags: [debug, jtag, waveform, host-cli, host-gui, logic-analyzer, ela, eio]
+tags: [debug, jtag, waveform, host-cli, host-gui, embedded-analyzer, rea, eio]
 pairs_with_ips: []
