@@ -33,6 +33,7 @@ package rr_rea_pkg is
     constant C_ADDR_TRIG_MASK   : unsigned(15 downto 0) := x"0028";  -- RW
     constant C_ADDR_CHAN_SEL    : unsigned(15 downto 0) := x"00A0";  -- RW (=0 v0.1)
     constant C_ADDR_NUM_CHAN    : unsigned(15 downto 0) := x"00A4";  -- RO (=1 v0.1)
+    constant C_ADDR_DECIM       : unsigned(15 downto 0) := x"00B0";  -- RW v0.3
     constant C_ADDR_TIMESTAMP_W : unsigned(15 downto 0) := x"00C4";  -- RO
     constant C_ADDR_START_PTR   : unsigned(15 downto 0) := x"00C8";  -- RO
     constant C_ADDR_DATA_BASE   : unsigned(15 downto 0) := x"0100";  -- RO

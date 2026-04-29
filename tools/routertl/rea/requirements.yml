@@ -142,6 +142,21 @@ functional_contract:
       clk_b within ≤4 dst-clock cycles, and vice versa for the
       reverse direction (toggle_b_in → pulse_a_out).
 
+  # ── rr_rea_capture_fsm (decimation, v0.3) ─────────────────────────
+  - id: REA-REQ-500
+    kind: behavioral
+    desc: >-
+      With decim_ratio_in=0, dpram_we fires every cycle (matches
+      v0.1/v0.2 — no decimation). Sliding-window contract intact.
+  - id: REA-REQ-501
+    kind: behavioral
+    desc: >-
+      With decim_ratio_in=N (N>0), dpram_we asserts on exactly one
+      cycle per (N+1) sample-clock cycles. wr_ptr advances on each
+      asserted cycle. post_count counts STORED samples (so the
+      post-trigger window is posttrig_len_in stored cells regardless
+      of decimation).
+
   # ── rr_rea_top (integration) ──────────────────────────────────────
   - id: REA-REQ-300
     kind: behavioral

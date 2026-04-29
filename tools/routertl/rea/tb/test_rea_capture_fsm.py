@@ -580,5 +580,97 @@ async def test_rea_req_401_trigger_in_does_not_drive_trigger_out(dut):
     )
 
 
+# ── REA-REQ-500/501: decimation (v0.3) ──────────────────────────────
+
+
+@cocotb.test()
+@requires("REA-REQ-500")
+async def test_rea_req_500_decimation_zero_stores_every_cycle(dut):
+    """With decim_ratio_in=0, dpram_we asserts every cycle —
+    matches v0.1/v0.2 behavior. Pin the no-decimation default."""
+    await _start_clk(dut)
+    await _reset(dut)
+
+    # Configure a never-firing trigger so the FSM stays in
+    # "armed waiting" forever — done stays 0, dpram_we stays high
+    # (when decim_ratio=0). Probe=0, value=0xFFF, mask=0xFFF →
+    # (0 & 0xFFF) == (0xFFF & 0xFFF) → 0 != 0xFFF → trigger_hit=0.
+    dut.probe_in.value = 0
+    dut.pretrig_len_in.value = 8
+    dut.posttrig_len_in.value = 8
+    dut.trig_value_in.value = 0xFFF
+    dut.trig_mask_in.value  = 0xFFF
+    dut.decim_ratio_in.value = 0    # ← no decimation
+    dut.trigger_in.value = 0
+
+    await ClockCycles(dut.sample_clk, 5)
+    await _pulse(dut.arm_pulse, dut, 1)
+
+    # Sample dpram_we across 16 cycles — should be high every cycle.
+    we_samples = []
+    for _ in range(16):
+        we_samples.append(int(dut.dpram_we.value))
+        await RisingEdge(dut.sample_clk)
+
+    assert all(we == 1 for we in we_samples), (
+        f"REA-REQ-500: dpram_we should be high every cycle when "
+        f"decim_ratio=0; observed {we_samples}"
+    )
+
+    dut._log.info("REA-REQ-500 PASS — no decimation = store every cycle")
+
+
+@cocotb.test()
+@requires("REA-REQ-501")
+async def test_rea_req_501_decimation_n_stores_one_in_n_plus_one(dut):
+    """With decim_ratio_in=N (N>0), dpram_we asserts exactly once
+    per (N+1) cycles. wr_ptr advances on each assertion only."""
+    await _start_clk(dut)
+    await _reset(dut)
+
+    DECIM = 3   # ratio=3 → store 1 of every 4 cycles
+
+    # Same never-firing trigger as REQ-500.
+    dut.probe_in.value = 0
+    dut.pretrig_len_in.value = 4
+    dut.posttrig_len_in.value = 4
+    dut.trig_value_in.value = 0xFFF
+    dut.trig_mask_in.value  = 0xFFF
+    dut.decim_ratio_in.value = DECIM
+    dut.trigger_in.value = 0
+
+    await ClockCycles(dut.sample_clk, 5)
+    await _pulse(dut.arm_pulse, dut, 1)
+    # Settle one cycle so the latched decim_ratio_r takes effect.
+    await RisingEdge(dut.sample_clk)
+
+    # Sample dpram_we + wr_ptr across 24 cycles. Expect exactly
+    # 24 / (DECIM+1) = 6 high-cycles.
+    high_count = 0
+    wr_ptr_first = int(dut.wr_ptr_out.value)
+    for _ in range(24):
+        if int(dut.dpram_we.value) == 1:
+            high_count += 1
+        await RisingEdge(dut.sample_clk)
+    wr_ptr_last = int(dut.wr_ptr_out.value)
+
+    expected_high = 24 // (DECIM + 1)
+    assert high_count == expected_high, (
+        f"REA-REQ-501: dpram_we should be high {expected_high}/24 "
+        f"cycles with decim_ratio={DECIM} (period={DECIM+1}); "
+        f"observed {high_count}/24"
+    )
+    # wr_ptr advances by exactly the number of stored samples.
+    assert wr_ptr_last - wr_ptr_first == expected_high, (
+        f"wr_ptr advanced by {wr_ptr_last - wr_ptr_first}, expected "
+        f"{expected_high} (one increment per stored sample)"
+    )
+
+    dut._log.info(
+        f"REA-REQ-501 PASS — decim_ratio={DECIM}: stored "
+        f"{high_count}/24 cycles (period={DECIM+1})"
+    )
+
+
 if __name__ == "__main__":
     main()

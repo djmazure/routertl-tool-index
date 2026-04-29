@@ -80,6 +80,8 @@ architecture rtl of rr_rea_top is
     signal reset_toggle_jclk : std_logic;
     signal trig_mode_jclk    : std_logic_vector(31 downto 0);
     signal chan_sel_jclk     : std_logic_vector(7 downto 0);
+    signal decim_ratio_jclk  : std_logic_vector(23 downto 0);
+    signal decim_ratio_sclk  : std_logic_vector(23 downto 0);
 
     signal pretrig_sclk    : std_logic_vector(C_PTR_W - 1 downto 0);
     signal posttrig_sclk   : std_logic_vector(C_PTR_W - 1 downto 0);
@@ -188,6 +190,7 @@ begin
             trig_mask_out    => trig_mask_jclk,
             trig_mode_out    => trig_mode_jclk,
             chan_sel_out     => chan_sel_jclk,
+            decim_ratio_out  => decim_ratio_jclk,
             arm_toggle_out   => arm_toggle_jclk,
             reset_toggle_out => reset_toggle_jclk
         );
@@ -232,6 +235,12 @@ begin
         port map (dst_clk => sample_clk, din => trig_mask_jclk,
                   dout => trig_mask_sclk);
 
+    -- v0.3 decimation ratio CDC
+    u_cdc_decim : rr_rea_sync_word
+        generic map (G_WIDTH => 24)
+        port map (dst_clk => sample_clk, din => decim_ratio_jclk,
+                  dout => decim_ratio_sclk);
+
     -- ── CDC: jtag_clk pulse toggles → sample_clk pulses ─────────
     u_cdc_arm : rr_rea_pulse_xfer
         port map (
@@ -260,6 +269,7 @@ begin
             posttrig_len_in => posttrig_sclk,
             trig_value_in   => trig_value_sclk,
             trig_mask_in    => trig_mask_sclk,
+            decim_ratio_in  => decim_ratio_sclk,
             armed       => armed_sclk,
             triggered   => triggered_sclk,
             done        => done_sclk,

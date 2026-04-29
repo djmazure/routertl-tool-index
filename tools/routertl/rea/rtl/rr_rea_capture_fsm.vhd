@@ -61,6 +61,11 @@ entity rr_rea_capture_fsm is
         posttrig_len_in : in  std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
         trig_value_in   : in  std_logic_vector(G_SAMPLE_W - 1 downto 0);
         trig_mask_in    : in  std_logic_vector(G_SAMPLE_W - 1 downto 0);
+        -- v0.3 decimation: capture every (decim_ratio + 1) samples.
+        -- Tied 0 disables decimation (every sample stored). Latched
+        -- on arm_pulse like the other config.
+        decim_ratio_in  : in  std_logic_vector(23 downto 0)
+                              := (others => '0');
 
         -- ── Status flags (combinational from registers) ──────────
         armed       : out std_logic;
@@ -95,6 +100,9 @@ architecture rtl of rr_rea_capture_fsm is
     signal post_count_r  : unsigned(C_PTR_W - 1 downto 0) := (others => '0');
     signal pretrig_len_r : unsigned(C_PTR_W - 1 downto 0) := (others => '0');
     signal posttrig_len_r: unsigned(C_PTR_W - 1 downto 0) := (others => '0');
+    signal decim_ratio_r : unsigned(23 downto 0)         := (others => '0');
+    signal decim_count_r : unsigned(23 downto 0)         := (others => '0');
+    signal decim_tick    : std_logic;
     signal trig_value_r  : std_logic_vector(G_SAMPLE_W - 1 downto 0)
                               := (others => '0');
     signal trig_mask_r   : std_logic_vector(G_SAMPLE_W - 1 downto 0)
@@ -111,6 +119,11 @@ begin
                              (trig_value_r and trig_mask_r))
                           else '0';
 
+    -- v0.3 decimation tick: '1' every (decim_ratio + 1) cycles.
+    -- decim_ratio = 0 → tick always high (no decimation, store every
+    -- cycle — matches v0.1/v0.2 behavior).
+    decim_tick <= '1' when decim_count_r = 0 else '0';
+
     -- ── Status outputs ───────────────────────────────────────────
     armed         <= armed_r;
     triggered     <= triggered_r;
@@ -122,8 +135,11 @@ begin
     start_ptr_out <= std_logic_vector(start_ptr_r);
 
     -- ── DPRAM drive — sliding-window write enable. Note: NOT gated
-    -- by `armed_r`. This is the architectural fix vs fcapz. ───────
-    dpram_we   <= '1' when done_r = '0' else '0';
+    -- by `armed_r`. This is the architectural fix vs fcapz.
+    -- v0.3: also gated by decim_tick so only every (decim_ratio+1)
+    -- sample is stored. With decim_ratio=0 the tick is always 1 and
+    -- behavior matches v0.1/v0.2 exactly. ───────────────────────
+    dpram_we   <= '1' when (done_r = '0' and decim_tick = '1') else '0';
     dpram_addr <= std_logic_vector(wr_ptr_r);
     dpram_din  <= probe_in;
 
@@ -143,6 +159,8 @@ begin
             posttrig_len_r <= (others => '0');
             trig_value_r   <= (others => '0');
             trig_mask_r    <= (others => '0');
+            decim_ratio_r  <= (others => '0');
+            decim_count_r  <= (others => '0');
             trigger_out_r  <= '0';
 
         elsif rising_edge(sample_clk) then
@@ -154,8 +172,24 @@ begin
             -- REA-REQ-100/101: wr_ptr advances every cycle while
             -- !done, regardless of armed state. arm_pulse does NOT
             -- reset wr_ptr — pre-arm context is preserved.
-            if done_r = '0' then
+            -- v0.3: also gated by decim_tick so wr_ptr only advances
+            -- on stored samples (one per decim_ratio+1 cycles).
+            if done_r = '0' and decim_tick = '1' then
                 wr_ptr_r <= wr_ptr_r + 1;
+            end if;
+
+            -- ── v0.3 decimation counter ────────────────────────
+            -- Down-counter that wraps at decim_ratio. When the counter
+            -- hits 0, decim_tick fires for one cycle (storing this
+            -- sample), then the counter reloads to decim_ratio.
+            -- arm_pulse resets the counter so each capture session
+            -- starts on a clean tick boundary.
+            if done_r = '0' then
+                if decim_count_r = 0 then
+                    decim_count_r <= decim_ratio_r;
+                else
+                    decim_count_r <= decim_count_r - 1;
+                end if;
             end if;
 
             -- ── reset_pulse: hard reset of capture state ───────
@@ -183,6 +217,13 @@ begin
                 posttrig_len_r <= unsigned(posttrig_len_in);
                 trig_value_r   <= trig_value_in;
                 trig_mask_r    <= trig_mask_in;
+                decim_ratio_r  <= unsigned(decim_ratio_in);
+                -- Load count to 0 so the FIRST cycle after arm ticks
+                -- (stores) — and subsequent ticks happen every
+                -- (decim_ratio + 1) cycles. With decim_ratio=0 the
+                -- counter reloads to 0 every cycle → tick every
+                -- cycle (no decimation, matches v0.1/v0.2).
+                decim_count_r  <= (others => '0');
                 -- Overflow check: window doesn't fit in DEPTH.
                 if (unsigned('0' & pretrig_len_in) +
                     unsigned('0' & posttrig_len_in)) >= G_DEPTH then
@@ -209,7 +250,11 @@ begin
             end if;
 
             -- ── Post-trigger countdown ─────────────────────────
-            if armed_r = '1' and triggered_r = '1' and done_r = '0' then
+            -- v0.3: counts STORED samples only (decim_tick gate),
+            -- so the post-trigger window is `posttrig_len` cells
+            -- regardless of decimation ratio.
+            if armed_r = '1' and triggered_r = '1' and done_r = '0'
+               and decim_tick = '1' then
                 if post_count_r >= posttrig_len_r then
                     -- Done capturing the post-trigger window.
                     -- REA-REQ-104: start_ptr <= trig_ptr - pretrig_len

@@ -69,6 +69,7 @@ entity rr_rea_regbank is
         trig_mask_out    : out std_logic_vector(G_SAMPLE_W - 1 downto 0);
         trig_mode_out    : out std_logic_vector(31 downto 0);
         chan_sel_out     : out std_logic_vector(7 downto 0);
+        decim_ratio_out  : out std_logic_vector(23 downto 0);
 
         -- ── Pulse toggles (to rr_rea_cdc → sample_clk pulses) ────
         arm_toggle_out   : out std_logic;
@@ -87,6 +88,7 @@ architecture rtl of rr_rea_regbank is
     signal trig_value_r : std_logic_vector(31 downto 0) := (others => '0');
     signal trig_mask_r  : std_logic_vector(31 downto 0) := (others => '0');
     signal chan_sel_r   : std_logic_vector(31 downto 0) := (others => '0');
+    signal decim_r      : std_logic_vector(31 downto 0) := (others => '0');
 
     -- ── Toggle bits — flipped on every write to CTRL.bit[N] ──────
     signal arm_toggle_r   : std_logic := '0';
@@ -120,6 +122,7 @@ begin
     trig_mask_out    <= trig_mask_r(G_SAMPLE_W - 1 downto 0);
     trig_mode_out    <= trig_mode_r;
     chan_sel_out     <= chan_sel_r(7 downto 0);
+    decim_ratio_out  <= decim_r(23 downto 0);
     arm_toggle_out   <= arm_toggle_r;
     reset_toggle_out <= reset_toggle_r;
 
@@ -133,6 +136,7 @@ begin
             trig_value_r   <= (others => '0');
             trig_mask_r    <= (others => '0');
             chan_sel_r     <= (others => '0');
+            decim_r        <= (others => '0');
             arm_toggle_r   <= '0';
             reset_toggle_r <= '0';
 
@@ -163,6 +167,8 @@ begin
                         trig_mask_r <= wr_data;
                     when C_ADDR_CHAN_SEL =>
                         chan_sel_r <= wr_data;
+                    when C_ADDR_DECIM =>
+                        decim_r <= wr_data;
 
                     when others =>
                         -- REA-REQ-012: writes to RO/unmapped addrs
@@ -180,7 +186,7 @@ begin
     -- cycle. The iface registers it on its TDO output.
     process (rd_addr,
              pretrig_r, posttrig_r, trig_mode_r, trig_value_r,
-             trig_mask_r, chan_sel_r,
+             trig_mask_r, chan_sel_r, decim_r,
              armed_in, triggered_in, done_in, overflow_in,
              start_ptr_in, capture_len_w)
         variable status : std_logic_vector(31 downto 0);
@@ -208,6 +214,7 @@ begin
             when C_ADDR_TRIG_MASK   => rd_data <= trig_mask_r;
             when C_ADDR_CHAN_SEL    => rd_data <= chan_sel_r;
             when C_ADDR_NUM_CHAN    => rd_data <= C_REG_NUM_CHAN;
+            when C_ADDR_DECIM       => rd_data <= decim_r;
             when C_ADDR_TIMESTAMP_W => rd_data <= C_REG_TIMESTAMP_W;
             when C_ADDR_START_PTR   => rd_data <= spr;
             when others             => rd_data <= (others => '0');
