@@ -157,6 +157,63 @@ functional_contract:
       post-trigger window is posttrig_len_in stored cells regardless
       of decimation).
 
+  # ── rr_rea_trig_seq (multi-stage sequencer, v0.3) ─────────────────
+  - id: REA-REQ-600
+    kind: behavioral
+    desc: >-
+      With G_TRIG_STAGES=1 and seq_enable=0, the FSM behaves
+      identically to the single-comparator path — trigger_hit
+      drives triggered_r and trig_ptr_r at the cycle of match.
+      No regression on REA-REQ-100..106.
+  - id: REA-REQ-601
+    kind: behavioral
+    desc: >-
+      With G_TRIG_STAGES=N and seq_enable=1, seq_state advances
+      from K to K+1 only when stage K's local comparator (using
+      seq_value_k, seq_mask_k, seq_mode_k against probe_in)
+      matches. seq_state never advances on a stage-K+1 match
+      while seq_state == K.
+  - id: REA-REQ-602
+    kind: behavioral
+    desc: >-
+      The FINAL stage's local comparator match fires triggered_r +
+      trig_ptr_r at the match cycle, driving the post-trigger
+      countdown unchanged. Same semantics as the single-stage
+      path's trigger_hit.
+  - id: REA-REQ-603
+    kind: behavioral
+    desc: >-
+      Each stage's seq_count_target_k, when non-zero, requires
+      that many cumulative matches before advancing. seq_counter_k
+      tracks the matches and resets when seq_state advances past
+      stage K (or on arm_pulse).
+  - id: REA-REQ-604
+    kind: negative
+    desc: >-
+      A non-final-stage match must NOT drive triggered_r or
+      trigger_out_r. Only the final stage's match drives the
+      capture trigger.
+  - id: REA-REQ-605
+    kind: negative
+    desc: >-
+      A stage-K+1 match while seq_state == K must NOT advance
+      seq_state past K (out-of-order matches are rejected, the
+      sequence requires in-order progression).
+  - id: REA-REQ-606
+    kind: behavioral
+    desc: >-
+      arm_pulse resets seq_state to 0 and clears all seq_counter_k
+      registers. A new arm cycle restarts the sequence from
+      stage 0 regardless of where the previous capture left it.
+  - id: REA-REQ-607
+    kind: behavioral
+    desc: >-
+      Per-stage config sits at ADDR_SEQ_BASE = 0x0040, stride 20
+      bytes per stage (matches fcapz). G_TRIG_STAGES=4 exposes
+      stages 0..3 at 0x40, 0x54, 0x68, 0x7C respectively.
+      seq_enable lives at the existing TRIG_MODE register so the
+      single-stage path stays the default.
+
   # ── rr_rea_top (integration) ──────────────────────────────────────
   - id: REA-REQ-300
     kind: behavioral
