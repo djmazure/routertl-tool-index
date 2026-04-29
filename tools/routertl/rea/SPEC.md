@@ -118,7 +118,7 @@ The on-chip RTL is unchanged from v0.1. v0.2 ships:
 |--------:|:--------|:--------|:--|
 | v0.2 | Host-side `REAClient` (capture protocol ownership) | RTL-P3.276 | **Shipped** |
 | v0.2 | Synthetic `sample_clk` anchor (host-side) | RTL-P3.272 v0.1 promise | **Shipped** |
-| v0.2 | Cross-domain trigger crossbar (`rr_rea_trig_xbar`) | RTL-P3.266 + (new) | Next up |
+| v0.2 | Cross-domain trigger crossbar (`rr_rea_trig_xbar`) | RTL-P3.266 + (new) | **Shipped** |
 | v0.2 | On-chip sample-clock tick channel (RTL companion to host anchor) | (new) | Parked |
 | v0.2 | Edge-detect trigger mode | RTL-P3.263 | Parked |
 | v0.3 | Multi-stage trigger sequencer | RTL-P3.265 | Parked |

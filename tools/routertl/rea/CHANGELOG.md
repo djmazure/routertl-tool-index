@@ -1,5 +1,16 @@
 # rr_rea — Changelog
 
+## v0.2.1 — 2026-04-29 (later same day)
+
+### Added
+- **Cross-domain trigger crossbar (`rr_rea_trig_xbar`)** — N=2 crossbar that routes one REA instance's local trigger fire to the other instance's `trigger_in` through CDC pulse-xfer. Fires both captures together so the resulting windows are time-coherent across clock domains. New REA-REQ-400/401 (FSM trigger_in semantics, no-loopback) + REA-REQ-402 (xbar 1:1 fanout). 3 new tests; 22/22 REQs covered.
+- `rr_rea_capture_fsm.trigger_in` input — when armed, fires the capture as if local; does NOT drive trigger_out (avoids ping-pong).
+
+### Changed
+- `rr_rea_capture_fsm`: trigger detection block now considers `trigger_hit OR trigger_in`; `trigger_out` only fires on local `trigger_hit`.
+
+---
+
 ## v0.2.0 — 2026-04-29
 
 ### Added

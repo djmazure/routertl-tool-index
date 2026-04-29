@@ -33,6 +33,7 @@ synthesis:
     - rtl/rr_rea_cdc.vhd
     - rtl/rr_rea_jtag_iface.vhd
     - rtl/rr_rea_top.vhd
+    - rtl/rr_rea_trig_xbar.vhd
 
 build:
   simulation:

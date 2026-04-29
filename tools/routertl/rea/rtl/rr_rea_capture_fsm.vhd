@@ -47,6 +47,15 @@ entity rr_rea_capture_fsm is
         arm_pulse   : in  std_logic;   -- 1 cycle wide
         reset_pulse : in  std_logic;   -- 1 cycle wide; clears state
 
+        -- ── External trigger input (REA-REQ-400) ─────────────────
+        -- 1-cycle pulse on sample_clk from the cross-domain trigger
+        -- crossbar (rr_rea_trig_xbar) — when armed, fires the
+        -- capture as if the local comparator hit. Does NOT drive
+        -- trigger_out (that would create a ping-pong loop with
+        -- other REA instances on the bus). Tied low when the
+        -- crossbar isn't connected.
+        trigger_in  : in  std_logic := '0';
+
         -- ── Latched config (sample_clk domain) ───────────────────
         pretrig_len_in  : in  std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
         posttrig_len_in : in  std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
@@ -185,15 +194,17 @@ begin
 
             -- ── Trigger detection ──────────────────────────────
             -- Fires only when armed and not yet triggered.
+            -- REA-REQ-400/401: an external trigger_in pulse fires
+            -- the capture exactly like a local hit, but does NOT
+            -- drive trigger_out (otherwise N coupled REA cores
+            -- would ping-pong each other forever).
             if armed_r = '1' and triggered_r = '0' and done_r = '0' then
-                if trigger_hit = '1' then
-                    -- REA-REQ-102: capture wr_ptr at the cycle
-                    -- trigger_hit asserts. Non-blocking → uses the
-                    -- current value of wr_ptr_r, which is the
-                    -- address being written THIS cycle.
-                    triggered_r   <= '1';
-                    trig_ptr_r    <= wr_ptr_r;
-                    trigger_out_r <= '1';
+                if trigger_hit = '1' or trigger_in = '1' then
+                    triggered_r <= '1';
+                    trig_ptr_r  <= wr_ptr_r;
+                    if trigger_hit = '1' then
+                        trigger_out_r <= '1';  -- LOCAL fire only
+                    end if;
                 end if;
             end if;
 

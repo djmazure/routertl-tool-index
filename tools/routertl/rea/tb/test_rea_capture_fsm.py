@@ -472,5 +472,113 @@ async def test_rea_req_106_no_uninit_zeros_when_prewarmed(dut):
     )
 
 
+# ── REA-REQ-400 + 401: external trigger_in semantics ───────────────
+
+
+@cocotb.test()
+@requires("REA-REQ-400")
+async def test_rea_req_400_external_trigger_in_fires_capture(dut):
+    """A trigger_in pulse on sample_clk fires the FSM exactly like a
+    local trigger_hit. triggered_r asserts and trig_ptr_r captures
+    wr_ptr_r at the same cycle."""
+    await _start_clk(dut)
+    await _reset(dut)
+
+    # Configure with mask=0 so local trigger_hit NEVER fires (auto
+    # would too, but mask=0 already makes hit always 1 — pin a
+    # value+mask that can never match: trig_value=0xFFF, mask=0xFFF,
+    # probe=0). That isolates the trigger_in path.
+    dut.probe_in.value = 0
+    dut.pretrig_len_in.value = 8
+    dut.posttrig_len_in.value = 8
+    dut.trig_value_in.value = 0xFFF
+    dut.trig_mask_in.value  = 0xFFF
+    dut.trigger_in.value    = 0
+
+    await ClockCycles(dut.sample_clk, 50)
+    await _pulse(dut.arm_pulse, dut, 1)
+
+    # Verify NO trigger fires from the (mismatched) local comparator.
+    await ClockCycles(dut.sample_clk, 30)
+    assert int(dut.triggered.value) == 0, (
+        "local trigger_hit should NOT have fired (mask blocks it)"
+    )
+
+    # Now pulse trigger_in for one cycle and observe the FSM fires.
+    prev_wr_ptr = int(dut.wr_ptr_out.value)
+    dut.trigger_in.value = 1
+    await RisingEdge(dut.sample_clk)
+    dut.trigger_in.value = 0
+    await RisingEdge(dut.sample_clk)
+
+    assert int(dut.triggered.value) == 1, (
+        "trigger_in pulse should have fired the capture"
+    )
+    trig_ptr = int(dut.trig_ptr_out.value)
+    # Same off-by-N tolerance as the local trigger test: trig_ptr
+    # snapshots the wr_ptr at the cycle the FSM observed the pulse.
+    delta = (trig_ptr - prev_wr_ptr) & 0xFFF
+    assert 0 <= delta <= 4, (
+        f"trig_ptr={trig_ptr}, prev_wr_ptr={prev_wr_ptr}, delta={delta} "
+        f"— expected close to wr_ptr at the trigger_in fire cycle"
+    )
+
+    dut._log.info(
+        f"REA-REQ-400 PASS — trigger_in pulse fired, trig_ptr={trig_ptr}"
+    )
+
+
+@cocotb.test()
+@requires("REA-REQ-401")
+async def test_rea_req_401_trigger_in_does_not_drive_trigger_out(dut):
+    """An external trigger_in pulse must NOT drive trigger_out_r —
+    otherwise coupled REA cores ping-pong each other forever. Only
+    a local trigger_hit drives trigger_out."""
+    await _start_clk(dut)
+    await _reset(dut)
+
+    # Same setup as REQ-400: local comparator can never match.
+    dut.probe_in.value = 0
+    dut.pretrig_len_in.value = 8
+    dut.posttrig_len_in.value = 8
+    dut.trig_value_in.value = 0xFFF
+    dut.trig_mask_in.value  = 0xFFF
+
+    await ClockCycles(dut.sample_clk, 50)
+    await _pulse(dut.arm_pulse, dut, 1)
+
+    # Watch trigger_out for an extended window during which we'll
+    # pulse trigger_in. trigger_out must STAY LOW.
+    saw_trigger_out = False
+
+    async def _watch():
+        nonlocal saw_trigger_out
+        for _ in range(40):
+            await RisingEdge(dut.sample_clk)
+            if int(dut.trigger_out.value) == 1:
+                saw_trigger_out = True
+
+    watcher = cocotb.start_soon(_watch())
+
+    # Pulse trigger_in.
+    dut.trigger_in.value = 1
+    await RisingEdge(dut.sample_clk)
+    dut.trigger_in.value = 0
+    await ClockCycles(dut.sample_clk, 20)
+    await watcher
+
+    assert int(dut.triggered.value) == 1, (
+        "precondition: trigger_in should still have fired the FSM"
+    )
+    assert saw_trigger_out is False, (
+        "REA-REQ-401 violated: trigger_out fired on a remote "
+        "(trigger_in) trigger — would ping-pong with paired REA cores"
+    )
+
+    dut._log.info(
+        "REA-REQ-401 PASS — trigger_in fires capture but NOT trigger_out"
+    )
+
+
 if __name__ == "__main__":
     main()

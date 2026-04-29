@@ -120,6 +120,28 @@ functional_contract:
       the captured window contains zero uninit-BRAM cells (no
       phantom zeros).
 
+  # ── rr_rea_capture_fsm (cross-domain trigger, v0.2) ───────────────
+  - id: REA-REQ-400
+    kind: behavioral
+    desc: >-
+      An external trigger_in pulse on sample_clk fires the capture
+      exactly like a local trigger_hit — triggered_r asserts and
+      trig_ptr_r captures wr_ptr_r at the same cycle.
+  - id: REA-REQ-401
+    kind: negative
+    desc: >-
+      An external trigger_in pulse must NOT drive trigger_out_r
+      (otherwise N coupled REA cores ping-pong forever). Only a
+      local trigger_hit drives trigger_out_r.
+
+  # ── rr_rea_trig_xbar (cross-domain crossbar, v0.2) ────────────────
+  - id: REA-REQ-402
+    kind: behavioral
+    desc: >-
+      A toggle on toggle_a_in produces exactly one pulse_b_out on
+      clk_b within ≤4 dst-clock cycles, and vice versa for the
+      reverse direction (toggle_b_in → pulse_a_out).
+
   # ── rr_rea_top (integration) ──────────────────────────────────────
   - id: REA-REQ-300
     kind: behavioral
