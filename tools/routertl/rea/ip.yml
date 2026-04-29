@@ -1,0 +1,47 @@
+# rr_rea — RouteRTL Embedded Analyzer (REA), v0.1
+#
+# Vendor-neutral on-chip logic analyzer IP — drop-in fcapz host
+# compatible at the JTAG register interface, but with sliding-window-
+# from-day-one capture (the architectural fix that fcapz needs).
+#
+# See SPEC.md for the SW-interface contract and module hierarchy,
+# and requirements.yml for the per-block test contract anchors.
+#
+# v0.1 lands rr_rea_dpram first (smallest unit, easiest to test) so we
+# can prove the test infrastructure end-to-end before scaffolding the
+# capture FSM, regbank, JTAG iface, and integration top.
+
+ip:
+  name: rr_rea
+  library: work
+  language: vhdl
+
+hdl:
+  top_module: rr_rea_dpram          # synth-smoke entry (smallest leaf)
+  top_sim:    rr_rea_dpram          # cocotb top for v0.1 ground-truth
+
+paths:
+  sources: rtl
+
+synthesis:
+  mode: rtl
+  sources:
+    - rtl/rr_rea_pkg.vhd
+    - rtl/rr_rea_dpram.vhd
+    - rtl/rr_rea_capture_fsm.vhd
+    - rtl/rr_rea_regbank.vhd
+    - rtl/rr_rea_cdc.vhd
+    - rtl/rr_rea_jtag_iface.vhd
+    - rtl/rr_rea_top.vhd
+
+build:
+  simulation:
+    sources: []                     # falls back to synthesis.sources above
+    test_dir: tb
+    simulator: nvc                  # VHDL-93+ free simulator
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml      # contract-first anchor (REA-REQ-N)
+
+ips: []

@@ -1,0 +1,130 @@
+# rr_rea — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each REA-REQ-N below is referenced by exactly one cocotb test in
+# tb/test_*.py via @requires(REA-REQ-N). `rr sim coverage-map` enforces
+# the mapping.
+#
+# kind:
+#   behavioral — positive contract (this MUST happen)
+#   negative   — explicit non-behavior (this MUST NOT happen — used to
+#                pin the architectural fixes vs fcapz, e.g. REA-REQ-101)
+
+ip: rr_rea
+version: 0.1
+
+functional_contract:
+
+  # ── rr_rea_dpram (sample + timestamp BRAM) ────────────────────────
+  - id: REA-REQ-200
+    kind: behavioral
+    desc: >-
+      Write/read same address (port A → port B) returns the same value
+      on the next clk_b cycle (synchronous read).
+  - id: REA-REQ-201
+    kind: behavioral
+    desc: >-
+      Concurrent write on port A and read on port B at DIFFERENT
+      addresses do not collide; port B sees previously-written data.
+  - id: REA-REQ-202
+    kind: behavioral
+    desc: >-
+      Generic WIDTH and DEPTH parameters drive the actual storage
+      shape (verified by writing/reading at addr=DEPTH-1 and
+      din=2^WIDTH-1).
+
+  # ── rr_rea_jtag_iface (BSCAN protocol decoder) ────────────────────
+  - id: REA-REQ-001
+    kind: behavioral
+    desc: >-
+      Single register write opcode produces exactly one reg_wr_en
+      pulse with reg_addr / reg_wdata carrying the values shifted in
+      via tdi.
+  - id: REA-REQ-002
+    kind: behavioral
+    desc: >-
+      Single register read opcode latches the addressed value and
+      shifts it out on TDO over the next 32 shift cycles.
+  - id: REA-REQ-003
+    kind: behavioral
+    desc: >-
+      N successive read scans each shift out their addressed reg_rdata
+      via tdo without losing or aliasing values — the prerequisite for
+      the host's read_block USER1 fallback path.
+
+  # ── rr_rea_regbank (memory-mapped register file) ──────────────────
+  - id: REA-REQ-010
+    kind: behavioral
+    desc: >-
+      Every RW register address round-trips an arbitrary 32-bit value
+      (write then read returns the same value).
+  - id: REA-REQ-011
+    kind: behavioral
+    desc: >-
+      STATUS register reflects its input wires (armed, triggered,
+      done, overflow) combinationally.
+  - id: REA-REQ-012
+    kind: negative
+    desc: >-
+      Write to a RO address is a no-op (no aliasing into a RW slot
+      at the same low-order bits).
+
+  # ── rr_rea_cdc (clock-domain crossings) ───────────────────────────
+  - id: REA-REQ-020
+    kind: behavioral
+    desc: >-
+      Slow-changing config word toggled mid-cycle on the source clock
+      settles on the destination clock within ≤2 dest-clock cycles
+      with no metastable glitch.
+  - id: REA-REQ-021
+    kind: behavioral
+    desc: >-
+      Toggle-pulse-encoded src_pulse event of N src_clk cycles produces
+      exactly one dst_pulse on dst_clk.
+
+  # ── rr_rea_capture_fsm (the heart) ────────────────────────────────
+  - id: REA-REQ-100
+    kind: behavioral
+    desc: >-
+      wr_ptr advances every sample_clk cycle from reset deassertion,
+      with armed=0. Sliding-window contract.
+  - id: REA-REQ-101
+    kind: negative
+    desc: >-
+      arm_pulse does NOT reset wr_ptr; the buffer's pre-arm context
+      is preserved across arm. Pins the architectural fix vs fcapz.
+  - id: REA-REQ-102
+    kind: behavioral
+    desc: >-
+      When triggered asserts, trig_ptr_out captures wr_ptr_out at
+      that same cycle (no off-by-N).
+  - id: REA-REQ-103
+    kind: behavioral
+    desc: >-
+      dpram_addr at the cycle dpram_we is high carries the trigger
+      sample value (probe_in & trig_mask) == (trig_value & trig_mask).
+  - id: REA-REQ-104
+    kind: behavioral
+    desc: >-
+      When done asserts, start_ptr_out == (trig_ptr_out - pretrig)
+      mod DEPTH.
+  - id: REA-REQ-105
+    kind: behavioral
+    desc: >-
+      Reading DEPTH samples (snooped via dpram_we / dpram_addr /
+      dpram_din) starting at start_ptr_out yields a time-monotonic
+      sequence with no gaps.
+  - id: REA-REQ-106
+    kind: negative
+    desc: >-
+      When the design has been running ≥ DEPTH cycles before arm,
+      the captured window contains zero uninit-BRAM cells (no
+      phantom zeros).
+
+  # ── rr_rea_top (integration) ──────────────────────────────────────
+  - id: REA-REQ-300
+    kind: behavioral
+    desc: >-
+      Full end-to-end with mocked BSCAN — driving tdi / capture /
+      shift_en / update / sel through the configure → arm → wait
+      done → read sequence the fcapz host uses, the dpram readback
+      via tdo matches a known sample-clock counter pattern.
