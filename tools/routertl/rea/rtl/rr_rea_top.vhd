@@ -38,6 +38,13 @@ entity rr_rea_top is
         sample_rst : in  std_logic;
         probe_in   : in  std_logic_vector(G_SAMPLE_W - 1 downto 0);
 
+        -- ── Local trigger pulse (1-cycle on sample_clk) ─────────
+        -- Exposed so the design can route it to an LED / external
+        -- pin / cross-domain trigger crossbar (v0.2). Doubles as a
+        -- "Vivado optimizer anchor" — without an observable output
+        -- the whole REA hierarchy gets pruned in synthesis.
+        trigger_out : out std_logic;
+
         -- ── JTAG TAP (jtag_clk domain) — driven by external wrapper
         --    in synth, driven by testbench in sim ─────────────────
         arst       : in  std_logic;
@@ -87,6 +94,7 @@ architecture rtl of rr_rea_top is
     signal done_sclk      : std_logic;
     signal overflow_sclk  : std_logic;
     signal trigger_out_sclk : std_logic;
+    signal trigger_sticky_r : std_logic := '0';
     signal dpram_we_sclk    : std_logic;
     signal dpram_addr_sclk  : std_logic_vector(C_PTR_W - 1 downto 0);
     signal dpram_din_sclk   : std_logic_vector(G_SAMPLE_W - 1 downto 0);
@@ -295,6 +303,21 @@ begin
         port map (dst_clk => reg_clk,
                   din => start_ptr_sclk,
                   dout => start_ptr_jclk);
+
+    -- ── trigger_out: pulse the external port + maintain a sticky
+    --    flag flipped on each trigger so an LED can dance and the
+    --    Vivado optimizer can't prune the hierarchy. ─────────────
+    trigger_out <= trigger_sticky_r;
+    process (sample_clk, sample_rst)
+    begin
+        if sample_rst = '1' then
+            trigger_sticky_r <= '0';
+        elsif rising_edge(sample_clk) then
+            if trigger_out_sclk = '1' then
+                trigger_sticky_r <= not trigger_sticky_r;
+            end if;
+        end if;
+    end process;
 
     -- ── Sample DPRAM ─────────────────────────────────────────────
     u_dpram : entity work.rr_rea_dpram
