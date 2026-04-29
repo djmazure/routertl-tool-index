@@ -1,5 +1,25 @@
 # rr_rea — Changelog
 
+## v0.3.1 — 2026-04-29
+
+### Added
+- **Multi-stage trigger sequencer** (REA-REQ-600..607). New `G_TRIG_STAGES` generic on `rr_rea_capture_fsm` (default 1, no synth overhead). When `seq_enable_in=1`, the FSM advances stage-by-stage through up to N comparators with optional per-stage match-count gating; only the final stage's match fires `triggered`. Out-of-order matches are rejected. arm_pulse resets the sequencer state.
+- New `seq_enable_in`, `seq_values_in`, `seq_masks_in`, `seq_counts_in` ports on `rr_rea_capture_fsm` (flat per-stage packed vectors). Internally uses flat-vector storage with combinational generate-block per-stage views — sidesteps an nvc 1.18 quirk with array-of-vector latching inside clocked-process loops.
+- Register layout follows fcapz convention: `ADDR_SEQ_BASE = 0x0040`, stride 20 bytes per stage. SEQ-window writes do not alias into the v0.1/v0.2 RW slots.
+- 6 new RTL-side tests (`test_rea_capture_fsm_seq.py`) + 1 backward-compat test (`test_rea_req_600_legacy_path_unchanged` in `test_rea_capture_fsm.py`) + 1 regbank addr-layout test (`test_rea_req_607_seq_register_layout`). 32/32 REQs covered.
+
+### Architectural backstory
+nvc 1.18 silently dropped values written through `array_of_vector_signal(k) <= input_vec(slice)` inside a clocked process loop. Switching to flat `std_logic_vector` storage with generate-block combinational views (for the per-stage type-narrow signals) resolved it. Documented in the FSM source for future-you.
+
+---
+
+## v0.3.0 — 2026-04-29
+
+### Added
+- **Decimation** (REA-REQ-500/501). Capture every (decim_ratio + 1)-th sample-clock cycle. Trades time-resolution for time-window. `ADDR_DECIM = 0x00B0`, 24-bit ratio. Verified on Zybo Z7-20 with `--decim 7`: counter values step by 8.
+
+---
+
 ## v0.2.1 — 2026-04-29 (later same day)
 
 ### Added

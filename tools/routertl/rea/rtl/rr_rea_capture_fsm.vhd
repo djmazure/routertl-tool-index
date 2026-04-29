@@ -33,8 +33,9 @@ library work;
 
 entity rr_rea_capture_fsm is
     generic (
-        G_SAMPLE_W : positive := 12;
-        G_DEPTH    : positive := 4096
+        G_SAMPLE_W     : positive := 12;
+        G_DEPTH        : positive := 4096;
+        G_TRIG_STAGES  : positive := 1   -- v0.3 sequencer depth (REA-REQ-607)
     );
     port (
         sample_clk  : in  std_logic;
@@ -65,6 +66,27 @@ entity rr_rea_capture_fsm is
         -- Tied 0 disables decimation (every sample stored). Latched
         -- on arm_pulse like the other config.
         decim_ratio_in  : in  std_logic_vector(23 downto 0)
+                              := (others => '0');
+
+        -- ── v0.3 multi-stage sequencer (REA-REQ-600..607) ────────
+        -- seq_enable_in selects between the legacy single-comparator
+        -- path (trig_value_in / trig_mask_in) and the per-stage
+        -- sequencer below. Tied 0 → legacy path (REA-REQ-600).
+        seq_enable_in     : in  std_logic := '0';
+
+        -- Per-stage value/mask/count_target arrays packed into flat
+        -- vectors so the entity stays VHDL-93-compatible. Each
+        -- stage K occupies bits [(K+1)*W - 1 : K*W] in its respective
+        -- vector. SAMPLE_W bits per stage for value/mask, 16 bits
+        -- per stage for count_target.
+        seq_values_in     : in  std_logic_vector(
+            G_TRIG_STAGES * G_SAMPLE_W - 1 downto 0)
+                              := (others => '0');
+        seq_masks_in      : in  std_logic_vector(
+            G_TRIG_STAGES * G_SAMPLE_W - 1 downto 0)
+                              := (others => '0');
+        seq_counts_in     : in  std_logic_vector(
+            G_TRIG_STAGES * 16 - 1 downto 0)
                               := (others => '0');
 
         -- ── Status flags (combinational from registers) ──────────
@@ -103,6 +125,48 @@ architecture rtl of rr_rea_capture_fsm is
     signal decim_ratio_r : unsigned(23 downto 0)         := (others => '0');
     signal decim_count_r : unsigned(23 downto 0)         := (others => '0');
     signal decim_tick    : std_logic;
+
+    -- ── Sequencer state (v0.3, REA-REQ-600..607) ─────────────────
+    -- seq_state_r tracks the current stage (0..G_TRIG_STAGES-1).
+    -- seq_counters_r[K] counts cumulative matches for stage K and
+    -- resets when seq_state advances past K (or on arm).
+    -- Per-stage value/mask/count are LATCHED on arm_pulse just
+    -- like the legacy comparator config; this keeps mid-capture
+    -- changes from disturbing an in-flight sequence.
+    constant C_SEQ_STATE_W : positive :=
+        clog2(G_TRIG_STAGES + 1);    -- +1 so we can express FINAL+1
+    -- Flat vectors for the per-stage config and counter state.
+    -- Avoids array-of-vector slicing inside a clocked process loop,
+    -- which nvc (1.18) handled inconsistently — the latch from the
+    -- input port to the array element silently dropped to zero.
+    -- Flat copies sidestep that and let the per-stage slice happen
+    -- only in pure-combinational generate blocks below.
+    signal seq_value_r_flat : std_logic_vector(
+        G_TRIG_STAGES * G_SAMPLE_W - 1 downto 0) := (others => '0');
+    signal seq_mask_r_flat  : std_logic_vector(
+        G_TRIG_STAGES * G_SAMPLE_W - 1 downto 0) := (others => '0');
+    signal seq_count_target_r_flat : std_logic_vector(
+        G_TRIG_STAGES * 16 - 1 downto 0) := (others => '0');
+    signal seq_counter_r_flat : std_logic_vector(
+        G_TRIG_STAGES * 16 - 1 downto 0) := (others => '0');
+
+    -- Per-stage views via generate (combinational slices).
+    type t_seq_count_array is array (0 to G_TRIG_STAGES - 1)
+        of unsigned(15 downto 0);
+    signal seq_count_target_view : t_seq_count_array;
+    signal seq_counter_view      : t_seq_count_array;
+    signal seq_state_r   : unsigned(C_SEQ_STATE_W - 1 downto 0)
+                              := (others => '0');
+    signal seq_enable_r  : std_logic := '0';
+
+    -- Per-stage match (combinational from probe_in). When the
+    -- corresponding seq_mask_r is 0 the comparator is "always
+    -- match" — useful for unconditional advance after counting.
+    signal stage_match : std_logic_vector(G_TRIG_STAGES - 1 downto 0);
+
+    -- "We just hit the final-stage's required count" — drives
+    -- triggered_r when seq_enable_r is on (REA-REQ-602).
+    signal seq_final_fire : std_logic;
     signal trig_value_r  : std_logic_vector(G_SAMPLE_W - 1 downto 0)
                               := (others => '0');
     signal trig_mask_r   : std_logic_vector(G_SAMPLE_W - 1 downto 0)
@@ -115,14 +179,61 @@ architecture rtl of rr_rea_capture_fsm is
 
 begin
 
-    trigger_hit <= '1' when ((probe_in and trig_mask_r) =
-                             (trig_value_r and trig_mask_r))
-                          else '0';
+    -- ── Per-stage views (combinational slices of flat vectors) ──
+    g_seq_views : for k in 0 to G_TRIG_STAGES - 1 generate
+        seq_count_target_view(k) <= unsigned(seq_count_target_r_flat(
+            k * 16 + 15 downto k * 16));
+        seq_counter_view(k) <= unsigned(seq_counter_r_flat(
+            k * 16 + 15 downto k * 16));
+    end generate;
+
+    -- ── Per-stage comparators (REA-REQ-601) ─────────────────────
+    -- Each stage K matches when (probe_in & mask_K) == (value_K
+    -- & mask_K). Same convention as the legacy single-comparator
+    -- path. Generated combinationally; G_TRIG_STAGES=1 collapses
+    -- to one comparator with no overhead.
+    g_stage_match : for k in 0 to G_TRIG_STAGES - 1 generate
+        stage_match(k) <= '1' when (
+            (probe_in and seq_mask_r_flat(k * G_SAMPLE_W + G_SAMPLE_W - 1
+                                          downto k * G_SAMPLE_W)) =
+            (seq_value_r_flat(k * G_SAMPLE_W + G_SAMPLE_W - 1
+                              downto k * G_SAMPLE_W) and
+             seq_mask_r_flat(k * G_SAMPLE_W + G_SAMPLE_W - 1
+                             downto k * G_SAMPLE_W))
+        ) else '0';
+    end generate;
+
+    -- ── Trigger-hit selection (REA-REQ-600 backward-compat) ─────
+    -- When seq_enable_r=0, behavior matches v0.1/v0.2 exactly:
+    -- the legacy trig_value_r / trig_mask_r drive trigger_hit.
+    -- When seq_enable_r=1, only the FINAL stage's match (qualified
+    -- by the count target — see process below) drives trigger_hit
+    -- via seq_final_fire.
+    trigger_hit <= '1' when (
+        seq_enable_r = '0' and
+        ((probe_in and trig_mask_r) = (trig_value_r and trig_mask_r))
+    ) else seq_final_fire when seq_enable_r = '1'
+      else '0';
 
     -- v0.3 decimation tick: '1' every (decim_ratio + 1) cycles.
     -- decim_ratio = 0 → tick always high (no decimation, store every
     -- cycle — matches v0.1/v0.2 behavior).
     decim_tick <= '1' when decim_count_r = 0 else '0';
+
+    -- ── Sequencer: final-stage fire (REA-REQ-602) ──────────────
+    -- Combinational: '1' when (a) sequencer enabled, (b) we're at
+    -- the final stage, (c) the final stage's local comparator
+    -- matches, AND (d) the cumulative match counter would reach
+    -- the count_target on this same cycle. Drives trigger_hit via
+    -- the selector above; the FSM block then captures wr_ptr_r
+    -- into trig_ptr_r unchanged.
+    seq_final_fire <= '1' when (
+        seq_enable_r = '1' and
+        seq_state_r = to_unsigned(G_TRIG_STAGES - 1, C_SEQ_STATE_W) and
+        stage_match(G_TRIG_STAGES - 1) = '1' and
+        seq_counter_view(G_TRIG_STAGES - 1) + 1
+            >= seq_count_target_view(G_TRIG_STAGES - 1)
+    ) else '0';
 
     -- ── Status outputs ───────────────────────────────────────────
     armed         <= armed_r;
@@ -161,6 +272,12 @@ begin
             trig_mask_r    <= (others => '0');
             decim_ratio_r  <= (others => '0');
             decim_count_r  <= (others => '0');
+            seq_enable_r   <= '0';
+            seq_state_r    <= (others => '0');
+            seq_value_r_flat        <= (others => '0');
+            seq_mask_r_flat         <= (others => '0');
+            seq_count_target_r_flat <= (others => '0');
+            seq_counter_r_flat      <= (others => '0');
             trigger_out_r  <= '0';
 
         elsif rising_edge(sample_clk) then
@@ -218,6 +335,14 @@ begin
                 trig_value_r   <= trig_value_in;
                 trig_mask_r    <= trig_mask_in;
                 decim_ratio_r  <= unsigned(decim_ratio_in);
+                -- REA-REQ-606: arm_pulse resets seq_state to 0 and
+                -- clears all counters; latches the per-stage config.
+                seq_enable_r   <= seq_enable_in;
+                seq_state_r    <= (others => '0');
+                seq_value_r_flat        <= seq_values_in;
+                seq_mask_r_flat         <= seq_masks_in;
+                seq_count_target_r_flat <= seq_counts_in;
+                seq_counter_r_flat      <= (others => '0');
                 -- Load count to 0 so the FIRST cycle after arm ticks
                 -- (stores) — and subsequent ticks happen every
                 -- (decim_ratio + 1) cycles. With decim_ratio=0 the
@@ -233,12 +358,54 @@ begin
                 end if;
             end if;
 
+            -- ── Sequencer state machine (REA-REQ-601..605) ─────
+            -- Only advances when the CURRENT stage matches.
+            -- Out-of-order matches are ignored (REA-REQ-605).
+            -- Non-final-stage matches advance seq_state but do NOT
+            -- fire triggered_r (REA-REQ-604) — the trigger-hit
+            -- selector above gates the final-stage fire onto
+            -- triggered_r via seq_final_fire.
+            if seq_enable_r = '1' and armed_r = '1'
+               and triggered_r = '0' and done_r = '0' then
+                for k in 0 to G_TRIG_STAGES - 1 loop
+                    if seq_state_r = to_unsigned(k, C_SEQ_STATE_W)
+                       and stage_match(k) = '1' then
+                        if seq_counter_view(k) + 1
+                           >= seq_count_target_view(k) then
+                            -- Reached the count target on this match.
+                            -- Final stage → drive seq_final_fire (the
+                            -- combinational signal feeding trigger_hit
+                            -- which the trigger-detect block below
+                            -- still gates onto triggered_r/trig_ptr_r).
+                            -- Non-final stage → just advance.
+                            if k = G_TRIG_STAGES - 1 then
+                                null;  -- final fire handled below
+                            else
+                                seq_state_r <=
+                                    seq_state_r + 1;
+                                -- Reset stage K's counter slice in
+                                -- the flat vector.
+                                seq_counter_r_flat(
+                                    k * 16 + 15 downto k * 16
+                                ) <= (others => '0');
+                            end if;
+                        else
+                            seq_counter_r_flat(
+                                k * 16 + 15 downto k * 16
+                            ) <= std_logic_vector(seq_counter_view(k) + 1);
+                        end if;
+                    end if;
+                end loop;
+            end if;
+
             -- ── Trigger detection ──────────────────────────────
             -- Fires only when armed and not yet triggered.
             -- REA-REQ-400/401: an external trigger_in pulse fires
             -- the capture exactly like a local hit, but does NOT
             -- drive trigger_out (otherwise N coupled REA cores
             -- would ping-pong each other forever).
+            -- REA-REQ-602: in seq_enable mode, trigger_hit is the
+            -- final-stage match path (seq_final_fire).
             if armed_r = '1' and triggered_r = '0' and done_r = '0' then
                 if trigger_hit = '1' or trigger_in = '1' then
                     triggered_r <= '1';

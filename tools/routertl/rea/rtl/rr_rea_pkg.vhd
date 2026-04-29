@@ -34,6 +34,18 @@ package rr_rea_pkg is
     constant C_ADDR_CHAN_SEL    : unsigned(15 downto 0) := x"00A0";  -- RW (=0 v0.1)
     constant C_ADDR_NUM_CHAN    : unsigned(15 downto 0) := x"00A4";  -- RO (=1 v0.1)
     constant C_ADDR_DECIM       : unsigned(15 downto 0) := x"00B0";  -- RW v0.3
+
+    -- ── Sequencer registers (REA-REQ-607, v0.3) ──────────────────
+    -- Per-stage block at ADDR_SEQ_BASE + N * SEQ_STRIDE:
+    --   +0x00  cfg          (mode bits + count_target)
+    --   +0x04  value_a
+    --   +0x08  mask_a
+    --   +0x0C  value_b      (reserved for v0.4 compound conditions)
+    --   +0x10  mask_b       (reserved for v0.4 compound conditions)
+    -- Layout matches fcapz_ela.v exactly so any future host SW
+    -- reuse keeps the same wire format.
+    constant C_ADDR_SEQ_BASE    : unsigned(15 downto 0) := x"0040";
+    constant C_SEQ_STRIDE       : positive := 20;  -- bytes per stage
     constant C_ADDR_TIMESTAMP_W : unsigned(15 downto 0) := x"00C4";  -- RO
     constant C_ADDR_START_PTR   : unsigned(15 downto 0) := x"00C8";  -- RO
     constant C_ADDR_DATA_BASE   : unsigned(15 downto 0) := x"0100";  -- RO
@@ -50,6 +62,13 @@ package rr_rea_pkg is
 
     -- ── TRIG_MODE values ─────────────────────────────────────────
     constant C_TRIG_MODE_VALUE_MATCH : std_logic_vector(31 downto 0) := x"00000001";
+
+    -- bit[1] = enable multi-stage sequencer (v0.3, REA-REQ-601).
+    -- When 0, the FSM uses the flat single-comparator path
+    -- (TRIG_VALUE / TRIG_MASK at 0x24/0x28, REA-REQ-100..106).
+    -- When 1, per-stage seq_value_k / seq_mask_k at ADDR_SEQ_BASE+
+    -- drive the trigger; the final stage's match fires capture.
+    constant C_TRIG_MODE_BIT_SEQ_EN : natural := 1;
 
     -- ── Helpers ──────────────────────────────────────────────────
     function clog2(n : natural) return natural;

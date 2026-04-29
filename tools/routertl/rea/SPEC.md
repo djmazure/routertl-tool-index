@@ -121,8 +121,8 @@ The on-chip RTL is unchanged from v0.1. v0.2 ships:
 | v0.2 | Cross-domain trigger crossbar (`rr_rea_trig_xbar`) | RTL-P3.266 + (new) | **Shipped** |
 | v0.2 | On-chip sample-clock tick channel (RTL companion to host anchor) | (new) | Parked |
 | v0.2 | Edge-detect trigger mode | RTL-P3.263 | Parked |
-| v0.3 | Multi-stage trigger sequencer | RTL-P3.265 | Parked |
-| v0.3 | Decimation | (new) | Parked |
+| v0.3 | Decimation | (new) | **Shipped** |
+| v0.3 | Multi-stage trigger sequencer | RTL-P3.265 | **Shipped** |
 | v0.4 | Segmented capture | (new) | Parked |
 | v0.4 | Storage qualification | (new) | Parked |
 | v0.5 | Multi-channel mux | (new) | Parked |

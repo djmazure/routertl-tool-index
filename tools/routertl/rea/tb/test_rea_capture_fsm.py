@@ -672,5 +672,42 @@ async def test_rea_req_501_decimation_n_stores_one_in_n_plus_one(dut):
     )
 
 
+# ── REA-REQ-600: backward-compat (G_TRIG_STAGES=1 + seq_enable=0) ───
+
+
+@cocotb.test()
+@requires("REA-REQ-600")
+async def test_rea_req_600_legacy_path_unchanged(dut):
+    """With seq_enable_in=0 (default) and the FSM at G_TRIG_STAGES=1
+    (default), trigger_hit comes from trig_value_in / trig_mask_in
+    via the legacy comparator path — same wr_ptr_out / trig_ptr_out
+    semantics as REA-REQ-100..106. No regression on the v0.1/v0.2
+    contract when the sequencer registers are zero."""
+    await _start_clk(dut)
+    await _reset(dut)
+
+    dut.probe_in.value = 0
+    dut.pretrig_len_in.value = 8
+    dut.posttrig_len_in.value = 8
+    dut.trig_value_in.value = 0x99
+    dut.trig_mask_in.value  = 0xFFF
+    # seq_enable_in stays 0 (default) — legacy path active.
+
+    await ClockCycles(dut.sample_clk, 5)
+    await _pulse(dut.arm_pulse, dut, 1)
+
+    # Drive 0x99 — legacy comparator should fire.
+    dut.probe_in.value = 0x99
+    fired = False
+    for _ in range(8):
+        await RisingEdge(dut.sample_clk)
+        if int(dut.triggered.value) == 1:
+            fired = True
+            break
+    assert fired, "REA-REQ-600: legacy trig_value_in / trig_mask_in path failed to fire"
+
+    dut._log.info("REA-REQ-600 PASS — legacy single-comparator path unchanged")
+
+
 if __name__ == "__main__":
     main()
