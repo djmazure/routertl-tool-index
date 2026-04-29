@@ -1,4 +1,4 @@
-# rr_rea — RouteRTL Embedded Analyzer (REA), v0.1
+# rr_rea — RouteRTL Embedded Analyzer (REA), v0.2
 #
 # Vendor-neutral on-chip logic analyzer IP — drop-in fcapz host
 # compatible at the JTAG register interface, but with sliding-window-

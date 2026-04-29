@@ -1,7 +1,7 @@
-# `rr_rea` — RouteRTL Embedded Analyzer (REA), v0.1 Spec
+# `rr_rea` — RouteRTL Embedded Analyzer (REA), v0.2 Spec
 
 ## What it is
-Vendor-neutral on-chip logic analyzer IP, JTAG-attached. **Drop-in compatible at the JTAG register interface with `fcapz_ela_xilinx7`** — the existing fcapz host SW (`Analyzer`, `XilinxHwServerTransport`) connects without modification.
+Vendor-neutral on-chip logic analyzer IP, JTAG-attached. **Drop-in compatible at the JTAG register interface with `fcapz_ela_xilinx7`** at the on-chip layer; on the host side, routertl ships its own first-party client (`REAClient`) that uses fcapz's transport for JTAG plumbing only. The seam is clear: routertl owns the capture protocol + register map; fcapz owns the JTAG transport layer.
 
 ## Why first-party
 - **Sliding-window from day one**: the dpram records continuously from reset deassertion. fcapz gates the dpram write on `armed`, leaving uninit BRAM cells when the trigger fires before `pretrig_len` cycles have elapsed. We don't ship that bug.
@@ -93,26 +93,40 @@ This is where we explicitly diverge from fcapz.
 
 ## Migration path
 
-1. Land `rr_rea` v0.1 in `routertl-tool-index/tools/routertl/rea/`.
-2. Verify on Zybo against the unmodified fcapz host SW.
-3. Switch `examples/zybo_fcapz_demo/` to instantiate `rr_rea_xilinx7`.
-4. Open a courtesy upstream PR to fcapz with the sliding-window RTL fix (the `mem_we_a = !done && store_enable` patch + `wr_ptr`-not-reset-on-arm).
-5. Register `routertl/rea` in the IP registry — first-party debug IP for SDK users.
+1. Land `rr_rea` v0.1 in `routertl-tool-index/tools/routertl/rea/`. **Done — v0.1 shipped 2026-04-29.**
+2. Verify on Zybo against the unmodified fcapz host SW. **Done.**
+3. Switch `examples/zybo_fcapz_demo/` to instantiate `rr_rea_xilinx7`. **Done.**
+4. Open a courtesy upstream PR to fcapz with the sliding-window RTL fix (the `mem_we_a = !done && store_enable` patch + `wr_ptr`-not-reset-on-arm). **Issue posted 2026-04-29; awaiting maintainer response.**
+5. Register `routertl/rea` in the IP registry — first-party debug IP for SDK users. **Done.**
+
+## v0.2 — Host-side ownership (shipped 2026-04-29)
+
+The on-chip RTL is unchanged from v0.1. v0.2 ships:
+
+- **`REAClient` (routertl.sdk.cli.rea)** — first-party SDK host client owning the capture protocol (configure / arm / wait_done / capture). Uses fcapz's transport for JTAG plumbing only. Replaces fcapz's `Analyzer.capture()` in the `rr ila capture` bridge.
+- **Batched dpram readback** — single xsdb `jtag sequence` for all DEPTH cells with `delay 20` between scans (matches fcapz's single-reg `READ_IDLE_CYCLES`, which is the timing that works on rr_rea's regbank). One round-trip instead of N. Verified on Zybo Z7-20: capture+read in 1.9 s for DEPTH=4096, down from ~5 s with the v0.1 single-reg fallback.
+- **Native `start_ptr`-based rotation** — REAClient reads `ADDR_START_PTR` (0xC8) from the chip and rotates the buffer in software so the trigger sample lands at index `pretrigger` by construction. No timestamp dependency.
+- **Synthetic `sample_clk` anchor channel (host-side)** — the bridge appends a 1-bit `sample_clk` channel to the wave_stream_v1 HELO descriptor and emits two sub-samples per real sample so RouteWave displays the clock at the *true* sample frequency (not sample_freq/2). Zero RTL/JTAG cost.
+
+10 unit tests pin REAClient's contract; the existing 34 ila bridge tests carry through with extended fakes for the new transport surface.
 
 ---
 
 ## Out of scope (parked)
 
-| Version | Feature | Backlog |
-|--------:|:--------|:--------|
-| v0.2 | Edge-detect trigger mode | RTL-P3.263 |
-| v0.2 | External trigger input + cross-domain trigger crossbar | RTL-P3.266 + (new) |
-| v0.3 | Multi-stage trigger sequencer | RTL-P3.265 |
-| v0.3 | Decimation | (new) |
-| v0.4 | Segmented capture | (new) |
-| v0.4 | Storage qualification | (new) |
-| v0.5 | Multi-channel mux | (new) |
-| v0.5 | Intel JTAG vendor wrapper (`sld_virtual_jtag`) | (new) |
+| Version | Feature | Backlog | Status |
+|--------:|:--------|:--------|:--|
+| v0.2 | Host-side `REAClient` (capture protocol ownership) | RTL-P3.276 | **Shipped** |
+| v0.2 | Synthetic `sample_clk` anchor (host-side) | RTL-P3.272 v0.1 promise | **Shipped** |
+| v0.2 | Cross-domain trigger crossbar (`rr_rea_trig_xbar`) | RTL-P3.266 + (new) | Next up |
+| v0.2 | On-chip sample-clock tick channel (RTL companion to host anchor) | (new) | Parked |
+| v0.2 | Edge-detect trigger mode | RTL-P3.263 | Parked |
+| v0.3 | Multi-stage trigger sequencer | RTL-P3.265 | Parked |
+| v0.3 | Decimation | (new) | Parked |
+| v0.4 | Segmented capture | (new) | Parked |
+| v0.4 | Storage qualification | (new) | Parked |
+| v0.5 | Multi-channel mux | (new) | Parked |
+| v0.5 | Intel JTAG vendor wrapper (`sld_virtual_jtag`) | (new) | Parked |
 
 ### v0.1 (host-side) — Synthetic clock anchor channel
 
