@@ -2,7 +2,7 @@
 
 Curated index of **FPGA companion host-side tools** for use with the
 [RouteRTL SDK](https://github.com/djmazure/routertl). Third registry
-alongside [`routertl-ip-index`](https://github.com/djmazure/routertl-ip-index)
+alongside [`routertl-ip-index`](https://github.com/routertl/ip-index)
 (HDL IP cores) and [`routertl-ref-index`](https://github.com/djmazure/routertl-ref-index)
 (reference designs).
 
@@ -23,7 +23,7 @@ Companion tools are distinct from:
 
 | Category                      | Where they live                              | Example       |
 |-------------------------------|----------------------------------------------|---------------|
-| HDL IP cores                  | [`routertl-ip-index`](https://github.com/djmazure/routertl-ip-index) | `axi_lite_slave` |
+| HDL IP cores                  | [`routertl-ip-index`](https://github.com/routertl/ip-index) | `axi_lite_slave` |
 | Reference designs             | [`routertl-ref-index`](https://github.com/djmazure/routertl-ref-index) | `routertl/linux_zybo` |
 | Vendor synthesis toolchains   | discovered by `rr doctor` on `$PATH`         | Vivado, Quartus |
 
