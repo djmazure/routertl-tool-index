@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+# SPDX-License-Identifier: MIT
+#
+# routertl-tool-index CI — RTL-P2.491
+#
+# 1. Schema validation: every tools/<ns>/<name>/tool.yml referenced from
+#    registry.yml is loaded + validated.
+# 2. Drift check: catalog.json on disk equals what generate_catalog.py
+#    produces from current sources.
+# 3. Additive-only merge gate: removals + status downgrades blocked
+#    unless the commit message carries a 'MIGRATION:' line.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with full history for merge gate)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --quiet pyyaml
+
+      - name: Validate schema + drift-check catalog.json
+        run: python generate_catalog.py --check
+
+      - name: Additive-only merge gate
+        if: github.event_name == 'pull_request'
+        run: |
+          BASELINE="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$BASELINE":"refs/remotes/origin/$BASELINE" || true
+          python scripts/check_additive_merge.py --baseline "origin/$BASELINE"
+
+      - name: Additive-only merge gate (push to main)
+        if: github.event_name == 'push'
+        run: python scripts/check_additive_merge.py --baseline HEAD~1

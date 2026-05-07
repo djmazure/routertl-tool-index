@@ -3,7 +3,7 @@
     "namespace": "lcapossio",
     "name": "fcapz",
     "version": "0.3.0",
-    "description": "Vendor-agnostic JTAG debug stack \u2014 REA (RouteRTL Embedded Analyzer; fcapz upstream calls it ELA), embedded I/O (EIO), embedded JTAG-AXI bridge, and JTAG-UART core. Pairs on-chip Verilog wrappers with a Python host CLI/GUI.",
+    "description": "Vendor-agnostic JTAG debug stack — REA (RouteRTL Embedded Analyzer; fcapz upstream calls it ELA), embedded I/O (EIO), embedded JTAG-AXI bridge, and JTAG-UART core. Pairs on-chip Verilog wrappers with a Python host CLI/GUI.",
     "license": "Apache-2.0",
     "homepage": "https://github.com/lcapossio/fpgacapZero",
     "maintainer": "Leonardo Capossio (lcapossio)",
